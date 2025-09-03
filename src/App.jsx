@@ -23,6 +23,7 @@ export default function App() {
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
   };
 
+  // fetch weather by city name (existing)
   const fetchWeather = async (city) => {
     try {
       setLoading(true);
@@ -30,9 +31,7 @@ export default function App() {
       setWeather(null);
 
       const geo = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-          city
-        )}&count=5`
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=5`
       ).then((r) => r.json());
 
       if (!geo.results || geo.results.length === 0) {
@@ -42,9 +41,24 @@ export default function App() {
       }
 
       const top = geo.results[0];
+      fetchWeatherByCoords(top.latitude, top.longitude, top.name, top.admin1, top.country);
+      saveRecent(top.name);
+    } catch (e) {
+      console.error(e);
+      setError("Network or server error. Try again.");
+      setLoading(false);
+    }
+  };
+
+  // ✅ new function: fetch weather by GPS coordinates
+  const fetchWeatherByCoords = async (lat, lon, name = "My Location", admin1 = "", country = "") => {
+    try {
+      setLoading(true);
+      setError("");
+      setWeather(null);
 
       const w = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${top.latitude}&longitude=${top.longitude}&current_weather=true&hourly=apparent_temperature&timezone=auto`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=apparent_temperature&timezone=auto`
       ).then((r) => r.json());
 
       let feelsLike = null;
@@ -54,9 +68,9 @@ export default function App() {
       }
 
       setWeather({
-        city: `${top.name}${top.admin1 ? ", " + top.admin1 : ""}, ${top.country}`,
-        latitude: top.latitude,
-        longitude: top.longitude,
+        city: `${name}${admin1 ? ", " + admin1 : ""}${country ? ", " + country : ""}`,
+        latitude: lat,
+        longitude: lon,
         temperature: w.current_weather.temperature,
         feelsLike,
         windspeed: w.current_weather.windspeed,
@@ -65,16 +79,31 @@ export default function App() {
         time: w.current_weather.time,
       });
 
-      saveRecent(top.name);
       setLoading(false);
     } catch (e) {
       console.error(e);
-      setError("Network or server error. Try again.");
+      setError("Failed to fetch weather for your location.");
       setLoading(false);
     }
   };
 
-  // Dynamic background based on weather
+  // ✅ handler for GPS button
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation not supported by your browser.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        fetchWeatherByCoords(latitude, longitude);
+      },
+      () => setError("Unable to retrieve your location. Please allow GPS access.")
+    );
+  };
+
+  // dynamic background
   const getBgClass = () => {
     if (!weather) return "from-blue-50 to-indigo-100";
     const type = weatherCodeMap[weather.weathercode]?.type;
@@ -91,13 +120,21 @@ export default function App() {
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col items-center justify-start p-6 bg-gradient-to-b ${getBgClass()} transition-colors duration-500`}
-    >
-      <h1 className="text-4xl font-bold mb-6 text-blue-800 drop-shadow-md">
-        🌤 Weather Now
-      </h1>
+    <div className={`min-h-screen flex flex-col items-center justify-start p-6 bg-gradient-to-b ${getBgClass()} transition-colors duration-500`}>
+      <h1 className="text-4xl font-bold mb-6 text-blue-800 drop-shadow-md">🌤 Weather Now</h1>
+
+      {/* search bar */}
       <SearchBar onSearch={fetchWeather} recent={recent} onPick={fetchWeather} loading={loading} />
+
+      {/* ✅ New "Use My Location" button */}
+      <button
+        onClick={handleUseMyLocation}
+        className="mt-3 px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition"
+        disabled={loading}
+      >
+        📍 Use My Location
+      </button>
+
       {loading && <Spinner />}
       {error && <p className="mt-4 text-red-500">{error}</p>}
       {weather && <WeatherCard data={weather} className="mt-6" />}
