@@ -46,7 +46,7 @@ npm run dev
 
 *Notes
 
-No location permission is required; search by city only.
+No location permission is required; search by city only. But also you can check you are currengt location if needed.
 
 The app uses the Open-Meteo API, which is free and requires no authentication.
 
